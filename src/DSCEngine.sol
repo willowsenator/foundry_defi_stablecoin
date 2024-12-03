@@ -28,6 +28,7 @@ pragma solidity ^0.8.20;
 import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
  * @title DSCEngine
@@ -58,9 +59,14 @@ contract DSCEngine is ReentrancyGuard {
     //////////////////
     // State variables
     /////////////////
+    uint256 private constant ADDIONAL_FEED_PRECISION = 1e10;
+    uint256 private constant PRECISION = 1e18;
+
     mapping(address tokem => address priceFeed) private s_priceFeeds; // tokentoPriceFeed
     mapping(address user => mapping(address token => uint256 amount)) private s_userCollateralDeposited; // userCollateral
+    mapping(address user => uint256 amountDSCMinted) private s_userDSCMinted; // userDSCMinted
     DecentralizedStableCoin private immutable i_dsc;
+    address[] private s_collateralTokens;
 
     //////////////////
     // Events
@@ -97,6 +103,7 @@ contract DSCEngine is ReentrancyGuard {
 
         for (uint256 i = 0; i < tokenAddresses.length; i++) {
             s_priceFeeds[tokenAddresses[i]] = priceFeedAddresses[i];
+            s_collateralTokens.push(tokenAddresses[i]);
         }
 
         i_dsc = DecentralizedStableCoin(dscAddress);
@@ -140,11 +147,67 @@ contract DSCEngine is ReentrancyGuard {
         // Redeem DSC
     }
 
-    function mintDSC() external {}
+
+    /**
+     * @notice Mint DSC
+     * @param amountDSCToMint Amount of DSC to mint
+     * @notice They must have more collateral than the value of the DSC they are minting
+     */
+    function mintDSC(uint256 amountDSCToMint) external moreThanZero(amountDSCToMint) nonReentrant {
+        s_userDSCMinted[msg.sender] += amountDSCToMint;
+        _revertIfHealthFactorIsBroken(msg.sender);
+    }
 
     function burnDSC() external {}
 
     function liquidate() external {}
 
     function getHealthFactor() external view {}
+
+     //////////////////
+    // Internal and private functions
+    /////////////////
+
+    function _getAccountInformation(address user) private view returns (uint256 totalDSCMinted, uint256 collateralValueInUSD) {
+        totalDSCMinted = s_userDSCMinted[user];
+        collateralValueInUSD = getAccountCollateralValueInUSD(user);
+    }
+
+    /**
+     * @notice Calculate how to close to being liquidated a user is
+     * @param user User address
+     */
+    function _healthFactor(address user) private view returns (uint256) {
+
+
+    }
+    function _revertIfHealthFactorIsBroken(address user) internal view {
+
+    }
+
+     //////////////////
+    // Public and external functions
+    /////////////////
+
+    function getAccountCollateralValueInUSD(address user) public view returns (uint256 totalCollateralValueInUSD) {
+       for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+            address token = s_collateralTokens[i];
+            uint256 amount = s_userCollateralDeposited[user][token];
+            totalCollateralValueInUSD += getUSDValue(token, amount);
+        }
+        return totalCollateralValueInUSD;
+    }
+
+    function getUSDValue(address token, uint256 amount) public view returns (uint256) {
+        // Get price feed
+        // Get price
+        // Return price * amount
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (, int price, , , ) = priceFeed.latestRoundData();
+
+        // 1 ETH = 1000 $
+        // 1 ETH = 1000 * 1e^8
+        // (((1000 * 1e8) * 1e10) * 1000) / 1e^18
+        return (((uint256(price) * ADDIONAL_FEED_PRECISION) * amount) / PRECISION);
+    }
 }
