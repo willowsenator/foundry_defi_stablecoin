@@ -189,7 +189,7 @@ contract DSCEngine is ReentrancyGuard {
      * @param user User address
      */
     function _healthFactor(address user) private view returns (uint256) {
-         (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
+        (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
         uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
 
         // $150 ETH / 100 DSC = 1.5
@@ -200,12 +200,13 @@ contract DSCEngine is ReentrancyGuard {
 
         return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
     }
+
     function _revertIfHealthFactorIsBroken(address user) internal view {
         uint256 userHealthFactor = _healthFactor(user);
         if (userHealthFactor < MIN_HEALTH_FACTOR) {
             revert DSCEngine__BreakHealthFactor(userHealthFactor);
         }
-    }   
+    }
 
     //////////////////
     // Public and external functions
