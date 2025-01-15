@@ -57,6 +57,8 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
     error DSCEngine__BreakHealthFactor(uint256 healthFactor);
     error DSCEngine__MintDSCFailed();
+    error DSCEngine_HealthFactorOk();
+    error DSCEngine__HealthFactorNotImproved();
 
     //////////////////
     // State variables
@@ -65,7 +67,8 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant PRECISION = 1e18;
     uint256 private constant LIQUIDATION_THRESHOLD = 50; // 200% collateralization ratio
     uint256 private constant LIQUIDATION_PRECISION = 100;
-    uint256 private constant MIN_HEALTH_FACTOR = 1;
+    uint256 private constant MIN_HEALTH_FACTOR = 1e18;
+    uint256 private constant LIQUIDATION_BONUS = 10;
 
     mapping(address tokem => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_userCollateralDeposited;
@@ -77,7 +80,7 @@ contract DSCEngine is ReentrancyGuard {
     // Events
     //////////////////
     event CollateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
-    event CollateralRedeemed(address indexed user, address indexed token, uint256 indexed amount);
+    event CollateralRedeemed(address indexed redeemedFrom, address indexed redeemTo, address indexed token, uint256 amount);
 
     //////////////////
     // Modifiers
@@ -174,14 +177,8 @@ contract DSCEngine is ReentrancyGuard {
      */
     function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral) public moreThanZero(amountCollateral)
     nonReentrant {
-        s_userCollateralDeposited[msg.sender][tokenCollateralAddress] -= amountCollateral;
-        emit CollateralRedeemed(msg.sender, tokenCollateralAddress, amountCollateral);
-
-        bool success = IERC20(tokenCollateralAddress).transfer(msg.sender, amountCollateral);
-        if (!success) {
-            revert DSCEngine__TransferFailed();
-        }
-
+        
+        _redeemCollateral(msg.sender, msg.sender, tokenCollateralAddress, amountCollateral);
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
@@ -200,23 +197,86 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function burnDSC(uint256 amount) public  moreThanZero(amount) {
-        s_userDSCMinted[msg.sender] -= amount;
-        bool success = i_dsc.transferFrom(msg.sender, address(this), amount);
-        // This conditional is hypothetical, as the transferFrom function is not implemented in the DecentralizedStableCoin contract
-        if (!success) {
-            revert DSCEngine__TransferFailed();
-        }
-        i_dsc.burn(amount);
+        _burnDSC(msg.sender, msg.sender, amount);
         _revertIfHealthFactorIsBroken(msg.sender); // I don't think this is necessary
     }
 
-    function liquidate() external {}
+    /**
+     * @notice Liquidate a user
+     * @param collateral Collateral token address
+     * @param user User address
+     * @param debtToCover Amount of debt to cover
+     * @notice Liquidate a user if their health factor is below 1
+     * @notice You will get a liquidation bonus if you liquidate a user
+     * @notice A known bug would be if the protocol were 100% or less collateralized, then we wouldn't be able to incentive the liquidators
+     */
+    function liquidate(address collateral, address user, uint256 debtToCover) external 
+    moreThanZero(debtToCover)
+    nonReentrant
+    {
+        // need to check if the user is below the health factor
+        uint256 startingUserHealthFactor = _healthFactor(user);
+        if (startingUserHealthFactor >= MIN_HEALTH_FACTOR) {
+            revert DSCEngine_HealthFactorOk();
+        }
+
+        // We want to burn DSC debt
+        // And taken their collateral
+        // Bad User: $140 ETH, $100 DSC
+        // debtToCover = 100
+        uint256 tokenAmountFromDebtCovered = getTokenAmountFromUSD(collateral, debtToCover);
+
+        // And give them a 10% bonus
+        // Sweep extra amounts into a treasury
+        // 0.05 * 0.1 = Getting 0.005
+        uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
+        uint256 collateralToRedeem = tokenAmountFromDebtCovered + bonusCollateral;
+
+        _redeemCollateral( user, msg.sender, collateral, collateralToRedeem);
+        _burnDSC(user, msg.sender, debtToCover);
+
+        uint256 endingUserHealthFactor = _healthFactor(user);
+        if (endingUserHealthFactor <= startingUserHealthFactor) {
+            revert DSCEngine__HealthFactorNotImproved();
+        }
+
+        _revertIfHealthFactorIsBroken(msg.sender);
+    }
+
+    function getTokenAmountFromUSD(address token, uint256 usdAmountInWei) public view returns(uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        return (usdAmountInWei * PRECISION) / (uint256(price) * ADDIONAL_FEED_PRECISION);
+    }
 
     function getHealthFactor() external view {}
 
     //////////////////
     // Internal and private functions
     /////////////////
+
+    /**
+     * @dev Internal function to burn DSC if health factor is broken
+     */
+    function _burnDSC(address onBehalfOf, address dscFrom, uint256 amountDSCToBurn) private {
+        s_userDSCMinted[onBehalfOf] -= amountDSCToBurn;
+        bool success = i_dsc.transferFrom(dscFrom, address(this), amountDSCToBurn);
+        // This conditional is hypothetical, as the transferFrom function is not implemented in the DecentralizedStableCoin contract
+        if (!success) {
+            revert DSCEngine__TransferFailed();
+        }
+        i_dsc.burn(amountDSCToBurn);
+    }
+
+    function _redeemCollateral(address from, address to, address tokenCollateralAddress, uint256 amountCollateral) private {
+        s_userCollateralDeposited[from][tokenCollateralAddress] -= amountCollateral;
+        emit CollateralRedeemed(from, to, tokenCollateralAddress, amountCollateral);
+
+        bool success = IERC20(tokenCollateralAddress).transfer(to, amountCollateral);
+        if (!success) {
+            revert DSCEngine__TransferFailed();
+        }
+    }
 
     function _getAccountInformation(address user)
         private
