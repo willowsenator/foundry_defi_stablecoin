@@ -17,12 +17,13 @@ contract DSCEngineTest is Test {
     address weth;
 
     address public USER = makeAddr("user");
-    uint256 public constant AMOUNT_COLLATERAL= 10 ether;
+    uint256 public constant AMOUNT_COLLATERAL = 10 ether;
     uint256 public constant STARTING_ERC20_BALANCE = 10 ether;
+
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, engine, config) = deployer.run();
-        (ethUsdPriceFeed,,weth,) = config.activeNetworkConfig();
+        (ethUsdPriceFeed,, weth,) = config.activeNetworkConfig();
 
         ERC20Mock(weth).mint(USER, STARTING_ERC20_BALANCE);
     }
@@ -31,14 +32,13 @@ contract DSCEngineTest is Test {
     // Price Tests ///
     ///////////////////
 
-    function testGetUSDValue() public view{
+    function testGetUSDValue() public view {
         uint256 ethAmount = 15e18;
         // 15e18 * 2000/ETH = 30000e18
         uint256 expectedUSD = 30000e18;
         uint256 actualUSD = engine.getUSDValue(weth, ethAmount);
         assertEq(expectedUSD, actualUSD);
     }
-
 
     ///////////////////////////////
     // Deposit collateral Tests ///
