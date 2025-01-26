@@ -248,8 +248,6 @@ contract DSCEngine is ReentrancyGuard {
         if (endingUserHealthFactor <= startingUserHealthFactor) {
             revert DSCEngine__HealthFactorNotImproved();
         }
-
-        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     function getTokenAmountFromUSD(address token, uint256 usdAmountInWei) public view returns (uint256) {
@@ -257,8 +255,6 @@ contract DSCEngine is ReentrancyGuard {
         (, int256 price,,,) = priceFeed.latestRoundData();
         return (usdAmountInWei * PRECISION) / (uint256(price) * ADDIONAL_FEED_PRECISION);
     }
-
-    function getHealthFactor() external view {}
 
     //////////////////
     // Internal and private functions
@@ -312,6 +308,11 @@ contract DSCEngine is ReentrancyGuard {
         // $1000 ETH / 100 DSC
         // 1000 * 50 = 50000 / 100 = (500 / 100) > 1
 
+        // Avoid division by zero
+        if (totalDSCMinted == 0) {
+            return type(uint256).max;
+        }
+
         return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
     }
 
@@ -327,6 +328,7 @@ contract DSCEngine is ReentrancyGuard {
     /////////////////
 
     function getAccountCollateralValueInUSD(address user) public view returns (uint256 totalCollateralValueInUSD) {
+        totalCollateralValueInUSD = 0;
         for (uint256 i = 0; i < s_collateralTokens.length; i++) {
             address token = s_collateralTokens[i];
             uint256 amount = s_userCollateralDeposited[user][token];
@@ -354,5 +356,9 @@ contract DSCEngine is ReentrancyGuard {
         returns (uint256 totalDscMinted, uint256 collateralValueInUSD)
     {
         (totalDscMinted, collateralValueInUSD) = _getAccountInformation(user);
+    }
+
+    function healthFactor(address user) external view returns (uint256) {
+        return _healthFactor(user);
     }
 }
