@@ -1,0 +1,1 @@
+// Handler is a contract to test the fuzzing of the contract

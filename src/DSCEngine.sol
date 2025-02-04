@@ -300,7 +300,6 @@ contract DSCEngine is ReentrancyGuard {
      */
     function _healthFactor(address user) private view returns (uint256) {
         (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
-        uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
 
         // $150 ETH / 100 DSC = 1.5
         // 150 * 50 = 7500 / 100 = (75 / 100) < 1
@@ -312,6 +311,7 @@ contract DSCEngine is ReentrancyGuard {
         if (totalDSCMinted == 0) {
             return type(uint256).max;
         }
+         uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
 
         return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
     }
