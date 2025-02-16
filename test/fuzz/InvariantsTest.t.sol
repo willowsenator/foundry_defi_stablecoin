@@ -22,15 +22,14 @@ contract InvariantsTest is StdInvariant, Test {
     address wbtc;
     Handler handler;
 
-
     function setUp() external {
         deployer = new DeployDSC();
-       (dsc, engine, config) = deployer.run();
-        (,,weth, wbtc) = config.activeNetworkConfig();
-       //targetContract(address(engine));
-       handler = new Handler(engine, dsc);
-       targetContract(address(handler));
-       // don't call redeemCollateral, unless there is collateral to redeem
+        (dsc, engine, config) = deployer.run();
+        (,, weth, wbtc) = config.activeNetworkConfig();
+        //targetContract(address(engine));
+        handler = new Handler(engine, dsc);
+        targetContract(address(handler));
+        // don't call redeemCollateral, unless there is collateral to redeem
     }
 
     function invariant_protocolMustHaveMoreValueThanTotalSupply() public view {
@@ -44,6 +43,6 @@ contract InvariantsTest is StdInvariant, Test {
         uint256 wethValue = engine.getUSDValue(weth, totalWethDeposited);
         uint256 wbtcValue = engine.getUSDValue(wbtc, totalWbtcDeposited);
 
-        assert (wethValue + wbtcValue >= totalSuppy);
+        assert(wethValue + wbtcValue >= totalSuppy);
     }
 }

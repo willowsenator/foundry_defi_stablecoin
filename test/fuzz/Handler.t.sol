@@ -20,12 +20,11 @@ contract Handler is Test {
     constructor(DSCEngine _engine, DecentralizedStableCoin _dsc) {
         engine = _engine;
         dsc = _dsc;
-        address [] memory collateralTokens = engine.getCollateralTokens();
+        address[] memory collateralTokens = engine.getCollateralTokens();
         weth = ERC20Mock(collateralTokens[0]);
         wbtc = ERC20Mock(collateralTokens[1]);
-        
     }
-    
+
     function depositCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
         ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
         amountCollateral = bound(amountCollateral, 1, MAX_DEPOSIT_SIZE);
@@ -40,7 +39,7 @@ contract Handler is Test {
     function mintDSC(uint256 amount) public {
         amount = bound(amount, 1, MAX_DEPOSIT_SIZE);
         (uint256 totalDscMinted, uint256 collateralValueInUSD) = engine.getAccountInformation(msg.sender);
-        int256 maxDscToMint = (int256(collateralValueInUSD)/2) - int256(totalDscMinted);
+        int256 maxDscToMint = (int256(collateralValueInUSD) / 2) - int256(totalDscMinted);
         if (maxDscToMint < 0) {
             return;
         }
@@ -62,9 +61,9 @@ contract Handler is Test {
         amountCollateral = bound(amountCollateral, 0, maxCollateralToRedeem);
 
         // Ensure amountCollateral is not zero
-    if (amountCollateral == 0) {
-        return;
-    }
+        if (amountCollateral == 0) {
+            return;
+        }
         vm.startPrank(msg.sender);
         engine.redeemCollateral(address(collateral), amountCollateral);
         vm.stopPrank();
@@ -72,7 +71,7 @@ contract Handler is Test {
 
     // Helper Functions
     function _getCollateralFromSeed(uint256 collateralSeed) private view returns (ERC20Mock) {
-        if (collateralSeed % 2 == 0)   {
+        if (collateralSeed % 2 == 0) {
             return weth;
         } else {
             return wbtc;
