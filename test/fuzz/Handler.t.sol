@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
 import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {console} from "forge-std/console.sol";
 
 contract Handler is Test {
     DSCEngine engine;
@@ -36,6 +37,24 @@ contract Handler is Test {
         vm.stopPrank();
     }
 
+    function mintDSC(uint256 amount) public {
+        amount = bound(amount, 1, MAX_DEPOSIT_SIZE);
+        (uint256 totalDscMinted, uint256 collateralValueInUSD) = engine.getAccountInformation(msg.sender);
+        int256 maxDscToMint = (int256(collateralValueInUSD)/2) - int256(totalDscMinted);
+        if (maxDscToMint < 0) {
+            return;
+        }
+
+        amount = bound(amount, 0, uint256(maxDscToMint));
+        if (amount == 0) {
+            return;
+        }
+
+        vm.startPrank(msg.sender);
+        engine.mintDSC(amount);
+        vm.stopPrank();
+    }
+
     function redeemCollateral(uint256 collateralSeed, uint256 amountCollateral) public {
         ERC20Mock collateral = _getCollateralFromSeed(collateralSeed);
         uint256 maxCollateralToRedeem = engine.getCollateralBalanceOfUser(msg.sender, address(collateral));
@@ -46,8 +65,9 @@ contract Handler is Test {
     if (amountCollateral == 0) {
         return;
     }
-
+        vm.startPrank(msg.sender);
         engine.redeemCollateral(address(collateral), amountCollateral);
+        vm.stopPrank();
     }
 
     // Helper Functions
