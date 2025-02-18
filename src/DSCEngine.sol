@@ -68,9 +68,9 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_THRESHOLD = 50; // 200% collateralization ratio
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
-    uint256 private constant LIQUIDATION_BONUS = 10;
+    uint256 private constant LIQUIDATION_BONUS = 10; // this means 10% bonus
 
-    mapping(address tokem => address priceFeed) private s_priceFeeds;
+    mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_userCollateralDeposited;
     mapping(address user => uint256 amountDSCMinted) private s_userDSCMinted;
     DecentralizedStableCoin private immutable i_dsc;
@@ -368,5 +368,9 @@ contract DSCEngine is ReentrancyGuard {
 
     function getCollateralBalanceOfUser(address user, address token) external view returns (uint256) {
         return s_userCollateralDeposited[user][token];
+    }
+
+    function getCollateralTokenPriceFeed(address token) external view returns (address) {
+        return s_priceFeeds[token];
     }
 }
